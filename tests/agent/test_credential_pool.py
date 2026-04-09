@@ -438,6 +438,11 @@ def test_load_pool_removes_stale_seeded_env_entry(tmp_path, monkeypatch):
 
 def test_load_pool_migrates_nous_provider_state(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
+    # Use far-future timestamps so the access_token and agent_key are not
+    # considered expired by _entry_needs_refresh().
+    from datetime import datetime, timezone, timedelta
+    future = datetime.now(timezone.utc) + timedelta(hours=2)
+    far_future = datetime.now(timezone.utc) + timedelta(hours=3)
     _write_auth_store(
         tmp_path,
         {
@@ -450,11 +455,11 @@ def test_load_pool_migrates_nous_provider_state(tmp_path, monkeypatch):
                     "client_id": "hermes-cli",
                     "token_type": "Bearer",
                     "scope": "inference:mint_agent_key",
-                    "access_token": "access-token",
-                    "refresh_token": "refresh-token",
-                    "expires_at": "2026-03-24T12:00:00+00:00",
+                    "access_token": "***",
+                    "refresh_token": "***",
+                    "expires_at": future.isoformat(),
                     "agent_key": "agent-key",
-                    "agent_key_expires_at": "2026-03-24T13:30:00+00:00",
+                    "agent_key_expires_at": far_future.isoformat(),
                 }
             },
         },
@@ -518,6 +523,9 @@ def test_load_pool_removes_stale_file_backed_singleton_entry(tmp_path, monkeypat
 
 def test_load_pool_migrates_nous_provider_state_preserves_tls(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
+    from datetime import datetime, timezone, timedelta
+    future = datetime.now(timezone.utc) + timedelta(hours=2)
+    far_future = datetime.now(timezone.utc) + timedelta(hours=3)
     _write_auth_store(
         tmp_path,
         {
@@ -530,11 +538,11 @@ def test_load_pool_migrates_nous_provider_state_preserves_tls(tmp_path, monkeypa
                     "client_id": "hermes-cli",
                     "token_type": "Bearer",
                     "scope": "inference:mint_agent_key",
-                    "access_token": "access-token",
-                    "refresh_token": "refresh-token",
-                    "expires_at": "2026-03-24T12:00:00+00:00",
+                    "access_token": "***",
+                    "refresh_token": "***",
+                    "expires_at": future.isoformat(),
                     "agent_key": "agent-key",
-                    "agent_key_expires_at": "2026-03-24T13:30:00+00:00",
+                    "agent_key_expires_at": far_future.isoformat(),
                     "tls": {
                         "insecure": True,
                         "ca_bundle": "/tmp/nous-ca.pem",

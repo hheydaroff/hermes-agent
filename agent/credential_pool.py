@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from hermes_constants import OPENROUTER_BASE_URL
 import hermes_cli.auth as auth_mod
 from hermes_cli.auth import (
+    ACCESS_TOKEN_REFRESH_SKEW_SECONDS,
     CODEX_ACCESS_TOKEN_REFRESH_SKEW_SECONDS,
     DEFAULT_AGENT_KEY_MIN_TTL_SECONDS,
     KIMI_CODE_BASE_URL,
@@ -23,6 +24,7 @@ from hermes_cli.auth import (
     _codex_access_token_is_expiring,
     _decode_jwt_claims,
     _import_codex_cli_tokens,
+    _is_expiring,
     _load_auth_store,
     _load_provider_state,
     _resolve_kimi_base_url,
@@ -627,10 +629,23 @@ class CredentialPool:
                 CODEX_ACCESS_TOKEN_REFRESH_SKEW_SECONDS,
             )
         if self.provider == "nous":
-            # Nous refresh/mint can require network access and should happen when
-            # runtime credentials are actually resolved, not merely when the pool
-            # is enumerated for listing, migration, or selection.
-            return False
+            # Check if the agent_key (short-lived inference API key) is missing
+            # or expiring.  The agent_key has a ~30 min TTL; when it expires
+            # the pool must trigger a refresh/mint cycle so the runtime gets a
+            # valid inference credential instead of a stale key or the OAuth
+            # bearer token (which the inference API rejects).
+            agent_key = entry.agent_key
+            if not isinstance(agent_key, str) or not agent_key.strip():
+                return True  # no agent key at all — needs mint
+            agent_key_expires = entry.agent_key_expires_at
+            if agent_key_expires is None:
+                # No expiry recorded — be safe and refresh
+                return True
+            # Also check if the access_token itself is expiring, since
+            # we'll need it to mint a new agent key.
+            if _is_expiring(entry.expires_at, ACCESS_TOKEN_REFRESH_SKEW_SECONDS):
+                return True
+            return _is_expiring(agent_key_expires, DEFAULT_AGENT_KEY_MIN_TTL_SECONDS)
         return False
 
     def mark_used(self, entry_id: Optional[str] = None) -> None:
